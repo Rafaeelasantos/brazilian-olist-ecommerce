@@ -2,18 +2,16 @@ bundle:
   name: olist_ecommerce
 
 workspace:
-  host: https://dbc-f76716c3-b252.cloud.databricks.com
+  host: https://dbc-f76716c3-b252.cloud.databricks.com/
 
 resources:
   pipelines:
-    olist_ecommerce_pipeline:
+    olist_ecommerce_dev_lakeflow:
       name: olist_ecommerce_dev_lakeflow
+      target: ecommerce_analytics
+      catalog: workspace
       serverless: true
       continuous: false
-      catalog: workspace
-      target: ecommerce_analytics
-      configuration:
-        pipelines.enableTrackHistory: "true"
       libraries:
         - file:
             path: src/bronze/bronze_orders.py
@@ -36,20 +34,17 @@ resources:
         - file:
             path: src/silver/silver_product_category.py
         - file:
-            path: src/gold/gold_dim_customers.py
+            path: src/gold/gold_orders_summary.py
         - file:
-            path: src/gold/gold_dim_products.py
+            path: src/gold/gold_revenue_by_category.py
         - file:
-            path: src/gold/gold_fct_orders.py
+            path: src/gold/gold_customer_lifetime_value.py
         - file:
-            path: src/gold/gold_fct_order_items.py
+            path: src/gold/gold_delivery_performance.py
 
 targets:
   dev:
     mode: development
     default: true
-
-  prod:
-    mode: production
-    run_as:
-      service_principal_name: <service-principal-name>
+    workspace:
+      host: https://dbc-f76716c3-b252.cloud.databricks.com/

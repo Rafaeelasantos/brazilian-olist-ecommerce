@@ -1,5 +1,5 @@
 import dlt
-from pyspark.sql.functions import current_timestamp, col, when
+from pyspark.sql.functions import col, trim, lower
 
 
 @dlt.table(
@@ -11,40 +11,31 @@ from pyspark.sql.functions import current_timestamp, col, when
         "pipelines.autoOptimize.zOrderCols": "product_id",
         "delta.enableChangeDataFeed": "true",
     },
-    comment="Silver layer — cleaned products enriched with category name (English)",
+    comment="Silver layer — cleaned products enriched with English category name",
 )
-@dlt.expect_or_drop("valid_product_id", "product_id IS NOT NULL")
-@dlt.expect_or_drop("valid_weight", "product_weight_g > 0")
+@dlt.expect("product_id is not null", "product_id IS NOT NULL")
 def silver_products():
-    products = dlt.read_stream("workspace.bronze.bronze_products")
-    categories = dlt.read("workspace.bronze.bronze_product_category")
+    products = dlt.read_stream("bronze_products").select(
+        col("product_id").cast("string"),
+        trim(lower(col("product_category_name"))).alias("product_category_name"),
+        col("product_name_lenght").cast("integer").alias("product_name_length"),
+        col("product_description_lenght").cast("integer").alias("product_description_length"),
+        col("product_photos_qty").cast("integer"),
+        col("product_weight_g").cast("double"),
+        col("product_length_cm").cast("double"),
+        col("product_height_cm").cast("double"),
+        col("product_width_cm").cast("double"),
+        col("_ingest_timestamp"),
+        col("_source_file"),
+    )
 
-    return (
-        products.join(
-            categories.select("product_category_name", "product_category_name_english"),
-            on="product_category_name",
-            how="left",
-        )
-        .select(
-            "product_id",
-            "product_category_name",
-            "product_category_name_english",
-            "product_name_length",
-            "product_description_length",
-            "product_photos_qty",
-            "product_weight_g",
-            "product_length_cm",
-            "product_height_cm",
-            "product_width_cm",
-            "_ingest_timestamp",
-            (
-                col("product_length_cm")
-                * col("product_height_cm")
-                * col("product_width_cm")
-            ).alias("product_volume_cm3"),
-            when(col("product_category_name_english").isNotNull(), True)
-            .otherwise(False)
-            .alias("has_english_category"),
-            current_timestamp().alias("_processing_timestamp"),
-        )
+    category = dlt.read("silver_product_category").select(
+        col("product_category_name"),
+        col("product_category_name_english"),
+    )
+
+    return products.join(
+        category,
+        on="product_category_name",
+        how="left",
     )

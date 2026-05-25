@@ -1,22 +1,28 @@
 import dlt
-from pyspark.sql.functions import current_timestamp, concat, col, lit
+from pyspark.sql.functions import col, upper, trim
 
 
-# Step 1: Preprocessing view with quality constraints and derived fields
-@dlt.view(name="silver_customers_preprocessed")
-@dlt.expect_or_drop("valid_customer_id", "customer_id IS NOT NULL")
-@dlt.expect_or_drop("valid_unique_id", "customer_unique_id IS NOT NULL")
-def silver_customers_preprocessed():
+# ── 1. Staging view: clean raw bronze data ──────────────────────────────────
+@dlt.view(
+    name="silver_customers_staged",
+    comment="Staging view — cleaned bronze customers ready for SCD Type 2 apply_changes",
+)
+def silver_customers_staged():
     return (
-        dlt.read_stream("workspace.bronze.bronze_customers")
-        .withColumn(
-            "customer_location",
-            concat(col("customer_city"), lit(", "), col("customer_state")),
+        dlt.read_stream("bronze_customers")
+        .select(
+            col("customer_id").cast("string"),
+            col("customer_unique_id").cast("string"),
+            col("customer_zip_code_prefix").cast("string"),
+            trim(upper(col("customer_city"))).alias("customer_city"),
+            trim(upper(col("customer_state"))).alias("customer_state"),
+            col("_ingest_timestamp"),
+            col("_source_file"),
         )
     )
 
 
-# Step 2: Declare the target streaming table (required before apply_changes)
+# ── 2. Target SCD Type 2 table definition ───────────────────────────────────
 dlt.create_streaming_table(
     name="silver_customers",
     table_properties={
@@ -26,17 +32,15 @@ dlt.create_streaming_table(
         "pipelines.autoOptimize.zOrderCols": "customer_id",
         "delta.enableChangeDataFeed": "true",
     },
-    comment="Silver layer — SCD Type 2 customers dimension",
+    comment="Silver layer — SCD Type 2 customers tracking city and state changes",
 )
 
-
-# Step 3: Apply CDC with SCD Type 2
+# ── 3. Apply changes (SCD Type 2) ───────────────────────────────────────────
 dlt.apply_changes(
-    target="workspace.silver.silver_customers",
-    source="silver_customers_preprocessed",
+    target="silver_customers",
+    source="silver_customers_staged",
     keys=["customer_id"],
     sequence_by=col("_ingest_timestamp"),
     stored_as_scd_type=2,
-    except_column_list=["_processing_timestamp", "_ingest_timestamp"],
-    track_history_except_column_list=["_processing_timestamp", "_ingest_timestamp"],
+    track_history_column_list=["customer_city", "customer_state", "customer_zip_code_prefix"],
 )

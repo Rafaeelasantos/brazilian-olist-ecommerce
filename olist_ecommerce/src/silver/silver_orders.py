@@ -1,5 +1,5 @@
 import dlt
-from pyspark.sql.functions import current_timestamp, datediff, col, when
+from pyspark.sql.functions import col, to_timestamp, datediff, when
 
 
 @dlt.table(
@@ -11,37 +11,54 @@ from pyspark.sql.functions import current_timestamp, datediff, col, when
         "pipelines.autoOptimize.zOrderCols": "order_id",
         "delta.enableChangeDataFeed": "true",
     },
-    comment="Silver layer — cleaned orders with derived delivery metrics",
+    comment="Silver layer — cleaned and typed orders with derived delivery metrics",
 )
-@dlt.expect_or_drop("valid_order_id", "order_id IS NOT NULL")
-@dlt.expect_or_drop("valid_customer_id", "customer_id IS NOT NULL")
-@dlt.expect_or_drop("valid_status", "order_status IS NOT NULL")
+@dlt.expect("order_id is not null", "order_id IS NOT NULL")
+@dlt.expect("customer_id is not null", "customer_id IS NOT NULL")
+@dlt.expect_or_drop("valid_order_status", "order_status IS NOT NULL")
 def silver_orders():
-    delay = datediff(
-        col("order_delivered_customer_date"),
-        col("order_estimated_delivery_date"),
-    ).alias("delivery_delay_days")
-
     return (
-        dlt.read_stream("workspace.bronze.bronze_orders")
+        dlt.read_stream("bronze_orders")
         .select(
-            "order_id",
-            "customer_id",
-            "order_status",
-            "order_purchase_timestamp",
-            "order_approved_at",
-            "order_delivered_carrier_date",
-            "order_delivered_customer_date",
-            "order_estimated_delivery_date",
-            "_ingest_timestamp",
-            delay,
-            datediff(col("order_approved_at"), col("order_purchase_timestamp")).alias(
-                "order_processing_days"
+            col("order_id").cast("string"),
+            col("customer_id").cast("string"),
+            col("order_status").cast("string"),
+            to_timestamp(col("order_purchase_timestamp"), "yyyy-MM-dd HH:mm:ss").alias(
+                "order_purchase_timestamp"
             ),
-            current_timestamp().alias("_processing_timestamp"),
+            to_timestamp(col("order_approved_at"), "yyyy-MM-dd HH:mm:ss").alias(
+                "order_approved_at"
+            ),
+            to_timestamp(
+                col("order_delivered_carrier_date"), "yyyy-MM-dd HH:mm:ss"
+            ).alias("order_delivered_carrier_date"),
+            to_timestamp(
+                col("order_delivered_customer_date"), "yyyy-MM-dd HH:mm:ss"
+            ).alias("order_delivered_customer_date"),
+            to_timestamp(
+                col("order_estimated_delivery_date"), "yyyy-MM-dd HH:mm:ss"
+            ).alias("order_estimated_delivery_date"),
+            col("_ingest_timestamp"),
+            col("_source_file"),
         )
         .withColumn(
-            "is_late_delivery",
-            when(col("delivery_delay_days") > 0, True).otherwise(False),
+            "delivery_days",
+            when(
+                col("order_delivered_customer_date").isNotNull()
+                & col("order_purchase_timestamp").isNotNull(),
+                datediff(
+                    col("order_delivered_customer_date"),
+                    col("order_purchase_timestamp"),
+                ),
+            ).otherwise(None),
+        )
+        .withColumn(
+            "is_delivered_on_time",
+            when(
+                col("order_delivered_customer_date").isNotNull()
+                & col("order_estimated_delivery_date").isNotNull(),
+                col("order_delivered_customer_date")
+                <= col("order_estimated_delivery_date"),
+            ).otherwise(None),
         )
     )

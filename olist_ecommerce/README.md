@@ -1,31 +1,42 @@
-# Olist E-Commerce — Databricks Asset Bundle (DLT Pipeline)
+# Olist E-Commerce Analytics — Lakeflow Pipeline
 
-Medallion architecture pipeline for the [Brazilian E-Commerce Public Dataset by Olist](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce) using **Databricks Delta Live Tables (DLT)** and the **Databricks Asset Bundle (DAB)** framework.
+**Version:** 2.0 | **Environment:** dev | **Platform:** Databricks Lakeflow (DLT)
+
+---
+
+## Overview
+
+This project implements a production-ready **Medallion Architecture** (Bronze → Silver → Gold) for the Olist Brazilian E-Commerce dataset using **Databricks Lakeflow Pipelines** (Delta Live Tables) with Unity Catalog.
+
+| Field | Value |
+|---|---|
+| **Catalog** | `workspace` |
+| **Bronze Schema** | `workspace.bronze` |
+| **Silver Schema** | `workspace.silver` |
+| **Gold Schema** | `workspace.gold` |
+| **Pipeline Target Schema** | `ecommerce_analytics` |
+| **Pipeline Name** | `olist_ecommerce_dev_lakeflow` |
+| **Workspace** | `https://dbc-f76716c3-b252.cloud.databricks.com/` |
 
 ---
 
 ## Architecture
 
 ```
-Raw CSV (Volume)
-      │
-      ▼
-┌─────────────┐
-│   BRONZE    │  STREAMING TABLEs — raw ingestion via read_files()
-│             │  Adds: _ingest_timestamp, _source_file
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│   SILVER    │  MATERIALIZED VIEWs — cast types, trim strings, deduplicate
-│             │  silver_customers uses APPLY CHANGES (SCD Type 2)
-└──────┬──────┘
-       │
-       ▼
-┌─────────────┐
-│    GOLD     │  MATERIALIZED VIEWs — aggregated, business-ready tables
-│             │  Optimised for BI / ML consumption
-└─────────────┘
+Raw CSV Files (Unity Catalog Volume)
+        │
+        ▼
+🥉 BRONZE — Auto Loader (cloudFiles)
+   Immutable raw ingestion + metadata fields
+        │
+        ▼
+🥈 SILVER — Curated Layer
+   Type casting, derived fields, DQ constraints
+   SCD Type 2 for Customers (apply_changes)
+        │
+        ▼
+🥇 GOLD — Star Schema
+   Dimensions + Facts ready for reporting
 ```
 
 ---
@@ -34,104 +45,105 @@ Raw CSV (Volume)
 
 ```
 olist_ecommerce/
-├── databricks.yml                         # Bundle configuration
+├── databricks.yml              ← Databricks Asset Bundle configuration
+├── README.md
 └── src/
     ├── bronze/
-    │   ├── bronze_orders.sql
-    │   ├── bronze_order_items.sql
-    │   ├── bronze_customers.sql
-    │   ├── bronze_products.sql
-    │   ├── bronze_product_category.sql
-    │   ├── bronze_sellers.sql
-    │   ├── bronze_order_payments.sql
-    │   └── bronze_order_reviews.sql
+    │   ├── bronze_orders.py
+    │   ├── bronze_order_items.py
+    │   ├── bronze_customers.py
+    │   ├── bronze_products.py
+    │   └── bronze_product_category.py
     ├── silver/
-    │   ├── silver_orders.sql
-    │   ├── silver_order_items.sql
-    │   ├── silver_customers.sql           ← SCD Type 2
-    │   ├── silver_products.sql
-    │   ├── silver_product_category.sql
-    │   ├── silver_sellers.sql
-    │   ├── silver_order_payments.sql
-    │   └── silver_order_reviews.sql
+    │   ├── silver_orders.py
+    │   ├── silver_order_items.py
+    │   ├── silver_customers.py        ← SCD Type 2
+    │   ├── silver_products.py
+    │   └── silver_product_category.py
     └── gold/
-        ├── gold_orders_summary.sql
-        ├── gold_revenue_by_category.sql
-        ├── gold_seller_performance.sql
-        └── gold_customer_ltv.sql
+        ├── gold_dim_customers.py
+        ├── gold_dim_products.py
+        ├── gold_fct_orders.py
+        └── gold_fct_order_items.py
 ```
 
 ---
 
-## Layers
+## Data Sources
 
-### Bronze
-| Table | Source File | Key |
-|---|---|---|
-| `bronze_orders` | `olist_orders_dataset.csv` | `order_id` |
-| `bronze_order_items` | `olist_order_items_dataset.csv` | `order_id, order_item_id` |
-| `bronze_customers` | `olist_customers_dataset.csv` | `customer_id` |
-| `bronze_products` | `olist_products_dataset.csv` | `product_id` |
-| `bronze_product_category` | `product_category_name_translation.csv` | `product_category_name` |
-| `bronze_sellers` | `olist_sellers_dataset.csv` | `seller_id` |
-| `bronze_order_payments` | `olist_order_payments_dataset.csv` | `order_id, payment_sequential` |
-| `bronze_order_reviews` | `olist_order_reviews_dataset.csv` | `review_id` |
-
-### Silver
-| Table | Pattern | Notes |
-|---|---|---|
-| `silver_orders` | Materialized View | Type casts, dedup by `order_id` |
-| `silver_order_items` | Materialized View | Type casts, dedup by `order_id, order_item_id` |
-| `silver_customers` | Streaming Table + APPLY CHANGES | **SCD Type 2** — full history tracked |
-| `silver_products` | Materialized View | Normalises column name typos from source |
-| `silver_product_category` | Materialized View | Portuguese → English name mapping |
-| `silver_sellers` | Materialized View | Trim & dedup by `seller_id` |
-| `silver_order_payments` | Materialized View | Type casts, dedup by `order_id, payment_sequential` |
-| `silver_order_reviews` | Materialized View | Type casts, dedup by `review_id` |
-
-### Gold
-| Table | Description |
+| Entity | Volume Path |
 |---|---|
-| `gold_orders_summary` | Per-order KPIs: items, revenue, payments, review score, delivery days |
-| `gold_revenue_by_category` | Monthly revenue & GMV by product category (English name) |
-| `gold_seller_performance` | Seller-level aggregations: revenue, delivery speed, review scores |
-| `gold_customer_ltv` | Customer lifetime value, tenure, order history |
+| `orders` | `/Volumes/workspace/default/ecommerce_raw_volume/olist_orders_dataset.csv/` |
+| `order_items` | `/Volumes/workspace/default/ecommerce_raw_volume/olist_order_items_dataset.csv/` |
+| `customers` | `/Volumes/workspace/default/ecommerce_raw_volume/olist_customers_dataset.csv/` |
+| `products` | `/Volumes/workspace/default/ecommerce_raw_volume/olist_products_dataset.csv/` |
+| `product_category` | `/Volumes/workspace/default/ecommerce_raw_volume/product_category/` |
 
 ---
 
-## Prerequisites
+## Tables
 
-| Requirement | Detail |
+### Bronze Layer
+
+| Table | Description |
 |---|---|
-| Databricks CLI | ≥ 0.200 with DAB support |
-| Workspace | Unity Catalog enabled (`workspace` catalog) |
-| Schemas | `workspace.bronze`, `workspace.silver`, `workspace.gold` must exist (or UC auto-create enabled) |
-| Volume | `/Volumes/workspace/default/ecommerce_raw_volume/` containing the Olist CSV files |
-| Cluster policy | DLT-compatible (Photon recommended) |
+| `workspace.bronze.bronze_orders` | Raw orders |
+| `workspace.bronze.bronze_order_items` | Raw order items |
+| `workspace.bronze.bronze_customers` | Raw customers |
+| `workspace.bronze.bronze_products` | Raw products |
+| `workspace.bronze.bronze_product_category` | Raw product category translations |
+
+### Silver Layer
+
+| Table | Description |
+|---|---|
+| `workspace.silver.silver_orders` | Cleaned orders with derived fields |
+| `workspace.silver.silver_order_items` | Cleaned order items with derived fields |
+| `workspace.silver.silver_customers` | SCD Type 2 customers dimension |
+| `workspace.silver.silver_products` | Cleaned products enriched with English category name |
+| `workspace.silver.silver_product_category` | Product category lookup table |
+
+### Gold Layer (Star Schema)
+
+| Table | Type | Description |
+|---|---|---|
+| `workspace.gold.dim_customers` | Dimension | Current customer records (SCD2 `__END_AT IS NULL`) |
+| `workspace.gold.dim_products` | Dimension | Product dimension |
+| `workspace.gold.fct_orders` | Fact | One row per order, enriched with customer attributes |
+| `workspace.gold.fct_order_items` | Fact | One row per order item, enriched with product attributes |
 
 ---
 
 ## Deployment
 
+### Prerequisites
+
+- Databricks CLI installed and configured
+- Profile: `rafaela.aws1992@gmail.com`
+
+### Commands
+
 ```bash
-# Authenticate
-databricks auth login --host https://<your-workspace>.azuredatabricks.net
+# Validate bundle configuration
+databricks bundle validate --profile rafaela.aws1992@gmail.com
 
-# Validate bundle
-databricks bundle validate
+# Deploy to dev
+databricks bundle deploy --profile rafaela.aws1992@gmail.com -t dev
 
-# Deploy pipeline (creates/updates DLT pipeline in Databricks)
-databricks bundle deploy --target ecommerce_analytics
+# Run pipeline manually
+databricks bundle run olist_ecommerce_dev_lakeflow -t dev
 
-# Run pipeline
-databricks bundle run ecommerce_dlt_pipeline --target ecommerce_analytics
+# Deploy to production
+databricks bundle deploy --profile rafaela.aws1992@gmail.com -t prod
 ```
 
 ---
 
-## Data Quality
+## Key Design Decisions
 
-- **Bronze**: all rows ingested (schema-on-read); no constraints enforced.
-- **Silver**: deduplication via `QUALIFY ROW_NUMBER() … = 1`; timestamp parsing and type casting surface errors early.
-- **Silver Customers**: full change history via SCD Type 2 (`APPLY CHANGES INTO … STORED AS SCD TYPE 2`).
-- **Gold**: business logic filters (e.g. `WHERE order_status = 'delivered'`) ensure only meaningful records are aggregated.
+- **No `LIVE.` prefix** — Unity Catalog 3-part names used everywhere (`catalog.schema.table`)
+- **SCD Type 2** — Implemented via `dlt.apply_changes()` for the customers dimension
+- **Auto Loader** — `spark.readStream.format("cloudFiles")` for all Bronze tables
+- **CDF disabled on Gold** — `delta.enableChangeDataFeed = "false"` on all Gold tables
+- **Schema inference disabled** — `inferSchema=false` for production stability
+- **Schema location** — Always on Unity Catalog Volume, never `/tmp/`

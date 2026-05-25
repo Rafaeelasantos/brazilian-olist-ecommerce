@@ -1,5 +1,5 @@
 import dlt
-from pyspark.sql.functions import current_timestamp
+from pyspark.sql.functions import col, lower, trim
 
 
 @dlt.table(
@@ -11,18 +11,16 @@ from pyspark.sql.functions import current_timestamp
         "pipelines.autoOptimize.zOrderCols": "product_category_name",
         "delta.enableChangeDataFeed": "true",
     },
-    comment="Silver layer — cleaned product category translation reference",
+    comment="Silver layer — cleansed product category name translations",
 )
-@dlt.expect_or_drop(
-    "valid_category_name", "product_category_name IS NOT NULL"
-)
+@dlt.expect_or_drop("category_name is not null", "product_category_name IS NOT NULL")
 def silver_product_category():
     return (
-        dlt.read_stream("workspace.bronze.bronze_product_category")
+        dlt.read_stream("bronze_product_category")
         .select(
-            "product_category_name",
-            "product_category_name_english",
-            "_ingest_timestamp",
-            current_timestamp().alias("_processing_timestamp"),
+            trim(lower(col("product_category_name"))).alias("product_category_name"),
+            trim(lower(col("product_category_name_english"))).alias("product_category_name_english"),
+            col("_ingest_timestamp"),
+            col("_source_file"),
         )
     )

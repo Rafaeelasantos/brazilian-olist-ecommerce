@@ -20,17 +20,14 @@ def bronze_order_items():
         .option("header", "true")
         .option("delimiter", ",")
         .option("inferSchema", "false")
-        .option("cloudFiles.schemaLocation", "/Volumes/workspace/default/ecommerce_raw_volume/_schemas/order_items")
+        .option(
+            "cloudFiles.schemaLocation",
+            "/Volumes/workspace/default/ecommerce_raw_volume/_schemas/order_items",
+        )
         .option("cloudFiles.schemaEvolutionMode", "none")
         .load("/Volumes/workspace/default/ecommerce_raw_volume/olist_order_items_dataset.csv/")
         .select(
-            "order_id",
-            "order_item_id",
-            "product_id",
-            "seller_id",
-            "shipping_limit_date",
-            "price",
-            "freight_value",
+            "*",
             current_timestamp().alias("_ingest_timestamp"),
             col("_metadata.file_path").alias("_source_file"),
         )

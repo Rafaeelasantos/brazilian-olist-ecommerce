@@ -20,19 +20,14 @@ def bronze_products():
         .option("header", "true")
         .option("delimiter", ",")
         .option("inferSchema", "false")
-        .option("cloudFiles.schemaLocation", "/Volumes/workspace/default/ecommerce_raw_volume/_schemas/products")
+        .option(
+            "cloudFiles.schemaLocation",
+            "/Volumes/workspace/default/ecommerce_raw_volume/_schemas/products",
+        )
         .option("cloudFiles.schemaEvolutionMode", "none")
         .load("/Volumes/workspace/default/ecommerce_raw_volume/olist_products_dataset.csv/")
         .select(
-            "product_id",
-            "product_category_name",
-            "product_name_lenght",
-            "product_description_lenght",
-            "product_photos_qty",
-            "product_weight_g",
-            "product_length_cm",
-            "product_height_cm",
-            "product_width_cm",
+            "*",
             current_timestamp().alias("_ingest_timestamp"),
             col("_metadata.file_path").alias("_source_file"),
         )
