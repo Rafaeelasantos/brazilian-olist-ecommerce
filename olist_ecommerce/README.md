@@ -1,3 +1,6 @@
+<<<<<<< HEAD
+# olist_ecommerce
+=======
 # Olist E-Commerce Analytics — Lakeflow Pipeline
 
 **Version:** 2.0 | **Environment:** dev | **Platform:** Databricks Lakeflow (DLT)
@@ -147,3 +150,4 @@ databricks bundle deploy --profile rafaela.aws1992@gmail.com -t prod
 - **CDF disabled on Gold** — `delta.enableChangeDataFeed = "false"` on all Gold tables
 - **Schema inference disabled** — `inferSchema=false` for production stability
 - **Schema location** — Always on Unity Catalog Volume, never `/tmp/`
+>>>>>>> 64eac5f (initial commit)
