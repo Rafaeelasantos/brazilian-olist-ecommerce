@@ -28,7 +28,7 @@ O pipeline é executado utilizando Databricks Lakeflow Pipelines.
 
 ---
 
-## 📊 Fonte dos Dados
+## Fonte dos Dados
 
 O conjunto de dados utilizado neste projeto foi obtido da plataforma Kaggle e faz parte do **Brazilian E-Commerce Public Dataset by Olist**.
 
