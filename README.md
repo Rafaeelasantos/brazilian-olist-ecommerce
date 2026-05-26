@@ -4,6 +4,16 @@ Pipeline construído com Databricks Lakeflow, PySpark, Auto Loader e Declarative
 
 ---
 
+## Fonte dos Dados
+
+Este projeto utiliza o dataset público **Brazilian E-Commerce** disponibilizado na plataforma Kaggle.
+
+O dataset contém dados reais, anonimizados, de e-commerce brasileiro, incluindo pedidos, clientes, produtos, pagamentos e avaliações.
+
+Fonte original: [Kaggle](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce)
+
+---
+
 # Arquitetura
 
 Este projeto implementa uma arquitetura Medalhão utilizando:
