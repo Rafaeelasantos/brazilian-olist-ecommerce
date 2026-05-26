@@ -59,7 +59,7 @@ tasks.md
    ↓
 lê spec.md
    ↓
-usa rules/pipeline_templates.md
+usa templates/pipeline_templates.md
    ↓
 gera o código do pipeline
 ```
