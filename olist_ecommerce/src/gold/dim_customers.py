@@ -9,13 +9,14 @@ from pyspark.sql.functions import col, current_timestamp
         "layer": "gold",
         "domain": "customers",
         "pipelines.autoOptimize.zOrderCols": "customer_id",
+        "delta.enableChangeDataFeed": "false",
     },
-    comment="Gold layer — customer dimension (current record only, active SCD Type 2 rows)",
+    comment="Camada Gold - dimensao de customers (snapshot ativo do SCD Type 2)",
 )
 def dim_customers():
     return (
-        dlt.read("silver_customers")
-        .filter(col("__END_AT").isNull())
+        dlt.read_stream("silver_customers")
+        .filter("__END_AT IS NULL")
         .select(
             col("customer_id"),
             col("customer_unique_id"),
@@ -23,6 +24,6 @@ def dim_customers():
             col("customer_city"),
             col("customer_state"),
             col("customer_location"),
-            current_timestamp().alias("_gold_timestamp"),
+            current_timestamp().alias("_dimension_refresh_timestamp"),
         )
     )

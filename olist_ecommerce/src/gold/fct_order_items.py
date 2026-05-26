@@ -1,5 +1,5 @@
 import dlt
-from pyspark.sql.functions import col, current_timestamp
+from pyspark.sql.functions import current_timestamp
 
 
 @dlt.table(
@@ -9,42 +9,44 @@ from pyspark.sql.functions import col, current_timestamp
         "layer": "gold",
         "domain": "order_items",
         "pipelines.autoOptimize.zOrderCols": "order_id",
+        "delta.enableChangeDataFeed": "false",
     },
-    comment="Gold layer — order items fact table joined with order and product dimensions",
+    comment="Camada Gold - tabela fato unica do star schema (grain = item de pedido)",
 )
 def fct_order_items():
-    items = dlt.read("silver_order_items").select(
-        col("order_id"),
-        col("order_item_id"),
-        col("product_id"),
-        col("seller_id"),
-        col("shipping_limit_date"),
-        col("price"),
-        col("freight_value"),
-        col("total_item_value"),
-    )
-
-    orders = dlt.read("fct_orders").select(
-        col("order_id"),
-        col("customer_id"),
-        col("customer_unique_id"),
-        col("customer_city"),
-        col("customer_state"),
-        col("order_status"),
-        col("order_purchase_timestamp"),
-        col("order_delivered_customer_date"),
-        col("is_late_delivery"),
-    )
-
-    products = dlt.read("dim_products").select(
-        col("product_id"),
-        col("product_category_name_english"),
-        col("product_weight_g"),
-        col("product_volume_cm3"),
-    )
+    items = dlt.read_stream("silver_order_items")
+    orders = dlt.read_stream("silver_orders")
+    dim_cust = dlt.read_stream("dim_customers")
+    dim_prod = dlt.read_stream("dim_products")
 
     return (
-        items.join(orders, on="order_id", how="left")
-        .join(products, on="product_id", how="left")
-        .withColumn("_gold_timestamp", current_timestamp())
+        items.join(orders, on="order_id", how="inner")
+        .join(dim_cust, on="customer_id", how="inner")
+        .join(dim_prod, on="product_id", how="inner")
+        .select(
+            items["order_id"],
+            items["order_item_id"],
+            items["product_id"],
+            orders["customer_id"],
+            items["seller_id"],
+            orders["order_status"],
+            orders["order_purchase_timestamp"],
+            orders["order_approved_at"],
+            orders["order_delivered_customer_date"],
+            orders["order_estimated_delivery_date"],
+            items["shipping_limit_date"],
+            orders["delivery_delay_days"],
+            orders["order_processing_days"],
+            orders["is_late_delivery"],
+            items["price"],
+            items["freight_value"],
+            items["total_item_value"],
+            dim_cust["customer_city"],
+            dim_cust["customer_state"],
+            dim_cust["customer_location"],
+            dim_prod["product_category_name"],
+            dim_prod["product_category_name_english"],
+            dim_prod["product_volume_cm3"],
+        )
+        .withColumn("_fact_processing_timestamp", current_timestamp())
     )

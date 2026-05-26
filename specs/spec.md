@@ -23,7 +23,7 @@ Todas as tabelas utilizam Unity Catalog no formato `catalog.schema.table`.
 |---|---|---|
 | Bronze | Camada Bruta | Ingestão imutável de arquivos CSV via Auto Loader (`cloudFiles`). Campos de metadados adicionados aqui. |
 | Silver | Camada Curada | Dados limpos e padronizados. SCD Type 2 aplicado em Customers via `dlt.apply_changes()`. Campos derivados calculados aqui. |
-| Gold | Camada de Negócio | Star schema com tabelas fato e dimensão. Métricas agregadas prontas para relatórios. |
+| Gold | Camada de Negócio | Star schema: **1 tabela fato** (`fct_order_items`, grain = item de pedido) no centro + **2 dimensões** (`dim_customers`, `dim_products`). `fct_order_items` consolida atributos de pedido e item em uma única tabela, eliminando a necessidade de duas facts. |
 
 ---
 
@@ -323,63 +323,45 @@ Aplicadas na view de pré-processamento antes do `apply_changes`:
 
 ---
 
-### 5.3 fct_orders (Tabela Fato de Pedidos)
+### 5.3 fct_order_items (Tabela Fato — Única)
+
+> **Star Schema:** Esta é a **única tabela fato** do modelo. Grain = 1 linha por item de pedido. Ela consolida atributos de nível de item (`silver_order_items`), atributos de nível de pedido (`silver_orders`) e atributos desnormalizados de ambas as dimensões (`dim_customers`, `dim_products`). `fct_orders` não existe — seus campos são absorvidos aqui.
 
 | Atributo | Valor |
 |---|---|
-| **Tipo** | Fato |
-| **Fonte principal** | `workspace.silver.silver_orders` |
-| **Join de dimensão** | `workspace.gold.dim_customers` em `customer_id` |
-| **PK** | `order_id` |
-
-#### Campos
-
-| Campo | Origem |
-|---|---|
-| `order_id` | `silver_orders.order_id` |
-| `customer_id` | `silver_orders.customer_id` |
-| `order_status` | `silver_orders.order_status` |
-| `order_purchase_timestamp` | `silver_orders.order_purchase_timestamp` |
-| `order_approved_at` | `silver_orders.order_approved_at` |
-| `order_delivered_customer_date` | `silver_orders.order_delivered_customer_date` |
-| `order_estimated_delivery_date` | `silver_orders.order_estimated_delivery_date` |
-| `delivery_delay_days` | `silver_orders.delivery_delay_days` |
-| `order_processing_days` | `silver_orders.order_processing_days` |
-| `is_late_delivery` | `silver_orders.is_late_delivery` |
-| `customer_city` | `dim_customers.customer_city` |
-| `customer_state` | `dim_customers.customer_state` |
-| `customer_location` | `dim_customers.customer_location` |
-| `_fact_processing_timestamp` | `current_timestamp()` |
-
-> **Template:** Use o **Template 5** de `templates/pipeline_templates.mdc`.
-
----
-
-### 5.4 fct_order_items (Tabela Fato de Itens do Pedido)
-
-| Atributo | Valor |
-|---|---|
-| **Tipo** | Fato |
+| **Tipo** | Fato (única fact table do star schema) |
 | **Fonte principal** | `workspace.silver.silver_order_items` |
-| **Join de dimensão** | `workspace.gold.dim_products` em `product_id` |
+| **Joins** | `workspace.silver.silver_orders` em `order_id` · `workspace.gold.dim_customers` em `customer_id` · `workspace.gold.dim_products` em `product_id` |
 | **PK** | `order_id` + `order_item_id` |
 
 #### Campos
 
-| Campo | Origem |
-|---|---|
-| `order_id` | `silver_order_items.order_id` |
-| `order_item_id` | `silver_order_items.order_item_id` |
-| `product_id` | `silver_order_items.product_id` |
-| `seller_id` | `silver_order_items.seller_id` |
-| `shipping_limit_date` | `silver_order_items.shipping_limit_date` |
-| `price` | `silver_order_items.price` |
-| `freight_value` | `silver_order_items.freight_value` |
-| `total_item_value` | `silver_order_items.total_item_value` |
-| `product_category_name` | `dim_products.product_category_name` |
-| `product_category_name_english` | `dim_products.product_category_name_english` |
-| `product_volume_cm3` | `dim_products.product_volume_cm3` |
-| `_fact_processing_timestamp` | `current_timestamp()` |
+| Campo | Origem | Grupo |
+|---|---|---|
+| `order_id` | `silver_order_items.order_id` | Chave |
+| `order_item_id` | `silver_order_items.order_item_id` | Chave |
+| `product_id` | `silver_order_items.product_id` | FK → dim_products |
+| `customer_id` | `silver_orders.customer_id` | FK → dim_customers |
+| `seller_id` | `silver_order_items.seller_id` | Atributo |
+| `order_status` | `silver_orders.order_status` | Atributo de pedido |
+| `order_purchase_timestamp` | `silver_orders.order_purchase_timestamp` | Atributo de pedido |
+| `order_approved_at` | `silver_orders.order_approved_at` | Atributo de pedido |
+| `order_delivered_customer_date` | `silver_orders.order_delivered_customer_date` | Atributo de pedido |
+| `order_estimated_delivery_date` | `silver_orders.order_estimated_delivery_date` | Atributo de pedido |
+| `shipping_limit_date` | `silver_order_items.shipping_limit_date` | Atributo de item |
+| `delivery_delay_days` | `silver_orders.delivery_delay_days` | Métrica de pedido |
+| `order_processing_days` | `silver_orders.order_processing_days` | Métrica de pedido |
+| `is_late_delivery` | `silver_orders.is_late_delivery` | Métrica de pedido |
+| `price` | `silver_order_items.price` | Métrica de item |
+| `freight_value` | `silver_order_items.freight_value` | Métrica de item |
+| `total_item_value` | `silver_order_items.total_item_value` | Métrica de item |
+| `customer_city` | `dim_customers.customer_city` | Desnorm. dim_customers |
+| `customer_state` | `dim_customers.customer_state` | Desnorm. dim_customers |
+| `customer_location` | `dim_customers.customer_location` | Desnorm. dim_customers |
+| `product_category_name` | `dim_products.product_category_name` | Desnorm. dim_products |
+| `product_category_name_english` | `dim_products.product_category_name_english` | Desnorm. dim_products |
+| `product_volume_cm3` | `dim_products.product_volume_cm3` | Desnorm. dim_products |
+| `_fact_processing_timestamp` | `current_timestamp()` | Auditoria |
 
 > **Template:** Use o **Template 5** de `templates/pipeline_templates.mdc`.
 
@@ -407,7 +389,6 @@ olist_ecommerce/
     └── gold/
         ├── dim_customers.py
         ├── dim_products.py
-        ├── fct_orders.py
         └── fct_order_items.py
 ```
 
@@ -418,7 +399,7 @@ olist_ecommerce/
 1. **Nomenclatura** — sempre `catalog.schema.table` com 3 partes. Nunca `LIVE.*`.
 2. **Bronze** — somente `spark.readStream.format("cloudFiles")`. Nunca transforme dados nesta camada.
 3. **Silver** — aplique limpeza, cast de tipos, campos derivados e restrições de qualidade (`@dlt.expect_or_drop`).
-4. **Gold** — leitura batch (`dlt.read()`). CDF desabilitado. Sempre inclua o `INNER JOIN` com a dimensão correspondente.
+4. **Gold** — leitura streaming (`dlt.read_stream()`). Isso garante que o DLT crie **Streaming Tables** (tabelas Delta reais) no Unity Catalog, em vez de **Materialized Views**. O DLT cria Materialized View quando detecta leitura batch (`dlt.read()`), e Streaming Table quando detecta `dlt.read_stream()` — mesmo que a função use `@dlt.table`. CDF desabilitado. **Star schema com 1 fact table (`fct_order_items`) e 2 dimensões (`dim_customers`, `dim_products`)** — nunca crie mais de uma tabela fato; consolide em `fct_order_items`.
 5. **SCD Type 2** — somente para `customers`. Três chamadas separadas no mesmo arquivo Python.
 6. **`schemaLocation`** — sempre em Unity Catalog Volume (`/Volumes/...`). Nunca `/tmp/`.
 7. **`delta.enableChangeDataFeed`** — `"true"` para Bronze e Silver; `"false"` para Gold.

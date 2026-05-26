@@ -1,5 +1,9 @@
 import dlt
+<<<<<<< HEAD
+from pyspark.sql.functions import col, to_timestamp, datediff, when
+=======
 from pyspark.sql.functions import col, to_timestamp, datediff, when, current_timestamp
+>>>>>>> rescue-sdd
 
 
 @dlt.table(
@@ -13,8 +17,13 @@ from pyspark.sql.functions import col, to_timestamp, datediff, when, current_tim
     },
     comment="Silver layer — cleaned and typed orders with derived delivery metrics",
 )
+<<<<<<< HEAD
+@dlt.expect("order_id is not null", "order_id IS NOT NULL")
+@dlt.expect("customer_id is not null", "customer_id IS NOT NULL")
+=======
 @dlt.expect_or_drop("valid_order_id", "order_id IS NOT NULL")
 @dlt.expect_or_drop("valid_customer_id", "customer_id IS NOT NULL")
+>>>>>>> rescue-sdd
 @dlt.expect_or_drop("valid_order_status", "order_status IS NOT NULL")
 def silver_orders():
     return (
@@ -40,6 +49,16 @@ def silver_orders():
             ).alias("order_estimated_delivery_date"),
             col("_ingest_timestamp"),
             col("_source_file"),
+<<<<<<< HEAD
+        )
+        .withColumn(
+            "delivery_days",
+            when(
+                col("order_delivered_customer_date").isNotNull()
+                & col("order_purchase_timestamp").isNotNull(),
+                datediff(
+                    col("order_delivered_customer_date"),
+=======
             current_timestamp().alias("_processing_timestamp"),
         )
         .withColumn(
@@ -60,17 +79,26 @@ def silver_orders():
                 & col("order_purchase_timestamp").isNotNull(),
                 datediff(
                     col("order_approved_at"),
+>>>>>>> rescue-sdd
                     col("order_purchase_timestamp"),
                 ),
             ).otherwise(None),
         )
         .withColumn(
+<<<<<<< HEAD
+            "is_delivered_on_time",
+=======
             "is_late_delivery",
+>>>>>>> rescue-sdd
             when(
                 col("order_delivered_customer_date").isNotNull()
                 & col("order_estimated_delivery_date").isNotNull(),
                 col("order_delivered_customer_date")
+<<<<<<< HEAD
+                <= col("order_estimated_delivery_date"),
+=======
                 > col("order_estimated_delivery_date"),
+>>>>>>> rescue-sdd
             ).otherwise(None),
         )
     )
