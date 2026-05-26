@@ -271,7 +271,6 @@ databricks bundle deploy --profile <profile> -t dev
 | --------------- | -------------------- |
 | dim_customers   | dimensão de clientes |
 | dim_products    | dimensão de produtos |
-| fct_orders      | fato de pedidos      |
 | fct_order_items | fato de itens        |
 
 ---
