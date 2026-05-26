@@ -1,26 +1,15 @@
 import dlt
-<<<<<<< HEAD
-from pyspark.sql.functions import col, upper, trim
-=======
 from pyspark.sql.functions import col, upper, trim, current_timestamp, concat_ws
->>>>>>> rescue-sdd
 
 
 # ── 1. Staging view: clean raw bronze data ──────────────────────────────────
 @dlt.view(
-<<<<<<< HEAD
-    name="silver_customers_staged",
-    comment="Staging view — cleaned bronze customers ready for SCD Type 2 apply_changes",
-)
-def silver_customers_staged():
-=======
     name="silver_customers_preprocessed",
     comment="Staging view — cleaned bronze customers ready for SCD Type 2 apply_changes",
 )
 @dlt.expect_or_drop("valid_customer_id", "customer_id IS NOT NULL")
 @dlt.expect_or_drop("valid_customer_unique_id", "customer_unique_id IS NOT NULL")
 def silver_customers_preprocessed():
->>>>>>> rescue-sdd
     return (
         dlt.read_stream("bronze_customers")
         .select(
@@ -31,14 +20,11 @@ def silver_customers_preprocessed():
             trim(upper(col("customer_state"))).alias("customer_state"),
             col("_ingest_timestamp"),
             col("_source_file"),
-<<<<<<< HEAD
-=======
             current_timestamp().alias("_processing_timestamp"),
         )
         .withColumn(
             "customer_location",
             concat_ws(", ", col("customer_city"), col("customer_state")),
->>>>>>> rescue-sdd
         )
     )
 
@@ -59,18 +45,10 @@ dlt.create_streaming_table(
 # ── 3. Apply changes (SCD Type 2) ───────────────────────────────────────────
 dlt.apply_changes(
     target="silver_customers",
-<<<<<<< HEAD
-    source="silver_customers_staged",
-    keys=["customer_id"],
-    sequence_by=col("_ingest_timestamp"),
-    stored_as_scd_type=2,
-    track_history_column_list=["customer_city", "customer_state", "customer_zip_code_prefix"],
-=======
     source="silver_customers_preprocessed",
     keys=["customer_id"],
     sequence_by=col("_ingest_timestamp"),
     stored_as_scd_type=2,
     except_column_list=["_ingest_timestamp", "_source_file", "_processing_timestamp"],
     track_history_except_column_list=["customer_unique_id"],
->>>>>>> rescue-sdd
 )
