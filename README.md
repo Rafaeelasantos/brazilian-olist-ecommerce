@@ -6,11 +6,9 @@ Pipeline construído com Databricks Lakeflow, PySpark, Auto Loader e Declarative
 
 ## Fonte dos Dados
 
-Este projeto utiliza o dataset público **Brazilian E-Commerce** disponibilizado na plataforma Kaggle.
+Este projeto utiliza o dataset público **Brazilian E-Commerce Public Dataset by Olist**, disponibilizado na plataforma [Kaggle](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce).
 
-O dataset contém dados reais, anonimizados, de e-commerce brasileiro, incluindo pedidos, clientes, produtos, pagamentos e avaliações.
-
-Fonte original: [Kaggle](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce)
+O conjunto de dados contém informações reais de um marketplace brasileiro e cobre o período aproximado de **2016 a 2018**, incluindo pedidos realizados em múltiplos marketplaces integrados pela Olist.
 
 ---
 
