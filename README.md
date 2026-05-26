@@ -38,7 +38,7 @@ olist_ecommerce/
 │   └── spec.md
 ├── tasks/
 │   └── tasks.md
-├── rules/
+├── templates/
 │   └── pipeline_templates.md
 └── src/
     ├── bronze/
