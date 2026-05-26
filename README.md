@@ -28,6 +28,16 @@ O pipeline é executado utilizando Databricks Lakeflow Pipelines.
 
 ---
 
+## 📊 Fonte dos Dados
+
+O conjunto de dados utilizado neste projeto foi obtido da plataforma Kaggle e faz parte do **Brazilian E-Commerce Public Dataset by Olist**.
+
+[Kaggle — Brazilian E-Commerce (Olist)](https://www.kaggle.com/datasets/olistbr/brazilian-ecommerce?resource=download&select=product_category_name_translation.csv)
+
+Este dataset contém informações reais (anonimizadas) de aproximadamente 100 mil pedidos realizados entre 2016 e 2018, incluindo dados de pedidos, clientes, produtos, pagamentos e logística.
+
+---
+
 # Estrutura do Projeto
 
 ```text
