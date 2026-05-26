@@ -1,5 +1,5 @@
 import dlt
-from pyspark.sql.functions import col, round as spark_round
+from pyspark.sql.functions import col, round as spark_round, to_timestamp, current_timestamp
 
 
 @dlt.table(
@@ -13,9 +13,9 @@ from pyspark.sql.functions import col, round as spark_round
     },
     comment="Silver layer — cleaned order items with derived total item value",
 )
-@dlt.expect("order_id is not null", "order_id IS NOT NULL")
-@dlt.expect("product_id is not null", "product_id IS NOT NULL")
-@dlt.expect_or_drop("valid_price", "price IS NOT NULL AND CAST(price AS DOUBLE) >= 0")
+@dlt.expect_or_drop("valid_order_id", "order_id IS NOT NULL")
+@dlt.expect_or_drop("valid_product_id", "product_id IS NOT NULL")
+@dlt.expect_or_drop("valid_price", "price IS NOT NULL AND price >= 0")
 def silver_order_items():
     return (
         dlt.read_stream("bronze_order_items")
@@ -24,11 +24,14 @@ def silver_order_items():
             col("order_item_id").cast("integer"),
             col("product_id").cast("string"),
             col("seller_id").cast("string"),
-            col("shipping_limit_date").cast("string"),
+            to_timestamp(col("shipping_limit_date"), "yyyy-MM-dd HH:mm:ss").alias(
+                "shipping_limit_date"
+            ),
             col("price").cast("double"),
             col("freight_value").cast("double"),
             col("_ingest_timestamp"),
             col("_source_file"),
+            current_timestamp().alias("_processing_timestamp"),
         )
         .withColumn(
             "total_item_value",

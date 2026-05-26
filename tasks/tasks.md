@@ -23,7 +23,7 @@ O projeto segue a arquitetura **Medallion** (Bronze → Silver → Gold) e deve 
 Gere uma mensagem de início no formato:
 
 ```
-🚀 START AGENTIC - SENIOR DATA ENGINEER
+START AGENTIC - SENIOR DATA ENGINEER
 Lendo e analisando as especificações do projeto Olist E-Commerce...
 ```
 
@@ -34,10 +34,10 @@ Lendo e analisando as especificações do projeto Olist E-Commerce...
 Por favor, **LEIA** e **ANALISE** os seguintes itens antes de qualquer geração de código:
 
 1. **Spec:** `specs/spec.md`
-2. **Code Templates (Rules):** `rules\pipeline_templates.md`
+2. **Code Templates (Rules):** `templates\pipeline_templates.md`
 3. **Workspace URL:** `https://dbc-f76716c3-b252.cloud.databricks.com/`
 
-> ⚠️ **Todos os arquivos Python gerados devem seguir estritamente os templates definidos em `.cursor/rules/pipeline_templates.md`.** Substitua cada `{{variable}}` pelo valor real da entidade sendo implementada. Não invente padrões fora dos templates.
+> ⚠️ **Todos os arquivos Python gerados devem seguir estritamente os templates definidos em `templates/pipeline_templates.md`.** Substitua cada `{{variable}}` pelo valor real da entidade sendo implementada. Não invente padrões fora dos templates.
 
 ---
 
@@ -121,7 +121,7 @@ olist_ecommerce/
 
 Após realizar todas as tarefas acima:
 
-- [ ] Siga os templates em `rules\pipeline_templates.md` sem desvios
+- [ ] Siga os templates em `templates\pipeline_templates.md` sem desvios
 - [ ] Siga as instruções da spec corretamente, sem omissões
 - [ ] **Revise toda a implementação** para garantir conformidade com a spec
 - [ ] Execute a **AÇÃO 2 — AGENTIC DATA SOLUTIONS ARCHITECT: SUPERVISOR**
@@ -177,9 +177,6 @@ databricks bundle deploy --profile rafaela.aws1992@gmail.com
 # Deploy explícito por target
 databricks bundle deploy --profile rafaela.aws1992@gmail.com -t dev
 
-# Rodar o job manualmente após deploy
-databricks bundle run ride_analytics_job -t dev
-
 # Gerar YAML a partir de um pipeline já existente no workspace
 databricks bundle generate pipeline --existing-pipeline-id <pipeline-id>
 ```
@@ -206,7 +203,7 @@ databricks bundle generate pipeline --existing-pipeline-id <pipeline-id>
 | 10 | Auto Loader via `spark.readStream.format("cloudFiles")` | Bronze tables devem usar Template 1. Nunca usar `read_files()` (sintaxe SQL) em Python. |
 | 11 | `databricks.yml` com `bundle`, `workspace`, `targets` e pipeline resource | O arquivo raiz deve declarar esses blocos; job resource separado é opcional. |
 | 12 | `targets` com `mode: development` e `mode: production` | Usar `mode:` em vez de `development: true` (field legado). `mode: production` exige `run_as`. |
-| 13 | Templates seguidos sem desvios | Cada arquivo deve corresponder ao template mapeado em `.cursor/rules/pipeline_templates.md`. |
+| 13 | Templates seguidos sem desvios | Cada arquivo deve corresponder ao template mapeado em `templates/pipeline_templates.md`. |
 
 ---
 
@@ -214,7 +211,7 @@ databricks bundle generate pipeline --existing-pipeline-id <pipeline-id>
 
 Após realizar todas as tarefas acima:
 
-- [ ] Siga estritamente os templates de `.cursor/rules/pipeline_templates.md`
+- [ ] Siga estritamente os templates de `templates/pipeline_templates.md`
 - [ ] Siga as instruções da spec corretamente, sem omissões
 - [ ] **Revise toda a implementação** para garantir conformidade com a spec
 - [ ] Execute a **validação** do Databricks Bundle:

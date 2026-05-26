@@ -1,19 +1,19 @@
 ---
-description: Code templates for Olist E-Commerce Lakeflow Pipeline (PySpark / DLT). Use these parameterised models whenever generating or reviewing pipeline files. Replace every {{variable}} with the actual value for the entity being implemented.
+description: Templates de código para o pipeline Lakeflow do Olist E-Commerce (PySpark / DLT). Use estes modelos parametrizados sempre que gerar ou revisar arquivos de pipeline. Substitua cada {{variável}} pelo valor real da entidade sendo implementada.
 alwaysApply: true
 ---
 
-# Lakeflow Pipeline — Code Templates (PySpark)
+# Lakeflow Pipeline — Templates de Código (PySpark)
 
-> All templates follow the patterns mandated by `specs/spec.md`.  
-> Replace every `{{variable}}` placeholder before writing a file.  
-> Never use the `LIVE.` prefix. Always use 3-part names: `catalog.schema.table`.
+> Todos os templates seguem os padrões definidos em `specs/spec.md`.  
+> Substitua cada placeholder `{{variável}}` antes de escrever um arquivo.  
+> Nunca use o prefixo `LIVE.`. Use sempre nomes com 3 partes: `catalog.schema.table`.
 
 ---
 
-## Variables Reference
+## Referência de Variáveis
 
-| Variable | Example values |
+| Variável | Exemplos de valores |
 |---|---|
 | `{{entity}}` | `orders`, `order_items`, `customers`, `products`, `product_category` |
 | `{{domain}}` | `orders`, `order_items`, `customers`, `products`, `product_category` |
@@ -26,7 +26,7 @@ alwaysApply: true
 | `{{silver_source}}` | `workspace.silver.silver_orders` |
 | `{{gold_source}}` | `workspace.gold.dim_customers` |
 | `{{cdf_enabled}}` | `"true"` (Bronze/Silver) \| `"false"` (Gold) |
-| `{{metadata_timestamp_field}}` | `_dimension_refresh_timestamp` (dim) \| `_fact_processing_timestamp` (fact) |
+| `{{metadata_timestamp_field}}` | `_dimension_refresh_timestamp` (dimensão) \| `_fact_processing_timestamp` (fato) |
 
 ---
 
@@ -46,7 +46,7 @@ from pyspark.sql.functions import current_timestamp, col
         "pipelines.autoOptimize.zOrderCols": "{{pk_field}}",
         "delta.enableChangeDataFeed": "true",
     },
-    comment="Bronze layer — raw ingestion of {{entity}} via Auto Loader",
+    comment="Camada Bronze — ingestão bruta de {{entity}} via Auto Loader",
 )
 def {{table_name}}():
     return (
@@ -71,7 +71,7 @@ def {{table_name}}():
 
 ---
 
-## Template 2 — Silver Streaming Table (standard entity)
+## Template 2 — Silver Streaming Table (entidade padrão)
 
 ```python
 import dlt
@@ -87,18 +87,18 @@ from pyspark.sql.functions import current_timestamp, col
         "pipelines.autoOptimize.zOrderCols": "{{pk_field}}",
         "delta.enableChangeDataFeed": "true",
     },
-    comment="Silver layer — cleaned {{entity}}",
+    comment="Camada Silver — {{entity}} limpo e padronizado",
 )
 @dlt.expect_or_drop("{{constraint_name}}", "{{constraint_expression}}")
 def {{table_name}}():
     return (
         dlt.read_stream("{{bronze_source}}")
         .select(
-            # --- source fields ---
+            # --- campos da fonte ---
             "{{pk_field}}",
-            # ... remaining fields ...
+            # ... demais campos ...
             "_ingest_timestamp",
-            # --- derived fields ---
+            # --- campos derivados ---
             # col("field_a") + col("field_b")).alias("derived_field"),
             current_timestamp().alias("_processing_timestamp"),
         )
@@ -109,30 +109,30 @@ def {{table_name}}():
 
 ## Template 3 — Silver SCD Type 2 (Customers)
 
-> Three independent calls in the same file — do NOT nest them.
+> Três chamadas independentes no mesmo arquivo — NÃO as aninhe.
 
 ```python
 import dlt
 from pyspark.sql.functions import current_timestamp, concat, col, lit
 
 
-# Step 1: Preprocessing view — apply constraints and derived fields before CDC
+# Passo 1: View de pré-processamento — aplica constraints e campos derivados antes do CDC
 @dlt.view(name="{{table_name}}_preprocessed")
 @dlt.expect_or_drop("{{constraint_name_1}}", "{{constraint_expression_1}}")
 @dlt.expect_or_drop("{{constraint_name_2}}", "{{constraint_expression_2}}")
 def {{table_name}}_preprocessed():
     return (
         dlt.read_stream("{{bronze_source}}")
-        # derived fields
+        # campos derivados
         .withColumn(
             "{{derived_field}}",
-            # expression using col() / lit() / concat() etc.
+            # expressão usando col() / lit() / concat() etc.
             concat(col("{{field_a}}"), lit(", "), col("{{field_b}}")),
         )
     )
 
 
-# Step 2: Declare the target streaming table (REQUIRED before apply_changes)
+# Passo 2: Declara a streaming table de destino (OBRIGATÓRIO antes de apply_changes)
 dlt.create_streaming_table(
     name="{{table_name}}",
     table_properties={
@@ -145,10 +145,10 @@ dlt.create_streaming_table(
 )
 
 
-# Step 3: Apply SCD Type 2 changes
+# Passo 3: Aplica as mudanças SCD Type 2
 dlt.apply_changes(
     target="workspace.silver.{{table_name}}",
-    source="{{table_name}}_preprocessed",   # simple name — no catalog prefix
+    source="{{table_name}}_preprocessed",   # nome simples — sem prefixo de catalog
     keys=["{{pk_field}}"],
     sequence_by=col("_ingest_timestamp"),
     stored_as_scd_type=2,
@@ -175,15 +175,15 @@ from pyspark.sql.functions import current_timestamp
         "pipelines.autoOptimize.zOrderCols": "{{pk_field}}",
         "delta.enableChangeDataFeed": "false",
     },
-    comment="Gold layer — {{entity}} dimension",
+    comment="Camada Gold — dimensão de {{entity}}",
 )
 def {{table_name}}():
     return (
         dlt.read("{{silver_source}}")
-        # .filter("__END_AT IS NULL")  # uncomment for SCD2 sources
+        # .filter("__END_AT IS NULL")  # descomentar para fontes SCD2
         .select(
             "{{pk_field}}",
-            # ... remaining dimension fields ...
+            # ... demais campos da dimensão ...
         )
         .withColumn("_dimension_refresh_timestamp", current_timestamp())
     )
@@ -191,7 +191,7 @@ def {{table_name}}():
 
 ---
 
-## Template 5 — Gold Fact Table (with dimension join)
+## Template 5 — Gold Fact Table (com join de dimensão)
 
 ```python
 import dlt
@@ -207,18 +207,18 @@ from pyspark.sql.functions import current_timestamp
         "pipelines.autoOptimize.zOrderCols": "{{pk_field}}",
         "delta.enableChangeDataFeed": "false",
     },
-    comment="Gold layer — {{entity}} fact table",
+    comment="Camada Gold — tabela fato de {{entity}}",
 )
 def {{table_name}}():
     fact = dlt.read("{{silver_source}}")
-    dim  = dlt.read("{{gold_source}}")   # e.g. workspace.gold.dim_customers
+    dim  = dlt.read("{{gold_source}}")   # ex: workspace.gold.dim_customers
 
     return (
         fact.join(dim, on="{{join_key}}", how="inner")
         .select(
             fact["{{pk_field}}"],
-            # ... remaining fact fields ...
-            # --- dimension attributes ---
+            # ... demais campos do fato ...
+            # --- atributos da dimensão ---
             dim["{{dim_field_1}}"],
             dim["{{dim_field_2}}"],
         )
@@ -228,15 +228,15 @@ def {{table_name}}():
 
 ---
 
-## Rules
+## Regras
 
-1. **3-part table names** — always `catalog.schema.table`. Never `LIVE.*`.
-2. **Bronze** — `spark.readStream.format("cloudFiles")`. Declare `cloudFiles.schemaLocation` explicitly. Point to the **directory**, not the file.
+1. **Nomes com 3 partes** — sempre `catalog.schema.table`. Nunca `LIVE.*`.
+2. **Bronze** — `spark.readStream.format("cloudFiles")`. Declare `cloudFiles.schemaLocation` explicitamente. Aponte para o **diretório**, não para o arquivo.
 3. **Silver streaming** — `dlt.read_stream("{{bronze_source}}")`.
-4. **Silver SCD2** — three separate calls: `@dlt.view` → `dlt.create_streaming_table()` → `dlt.apply_changes()`.
-5. **Gold** — `dlt.read()` (batch). CDF **disabled** (`"false"`).
-6. **Fact tables** — must `INNER JOIN` their dimension. Never omit the join.
-7. **`schema=` parameter** — never pass `schema="catalog.schema"` to `@dlt.table()` or `dlt.create_streaming_table()`. That parameter is for column DDL only.
-8. **`except_column_list`** and **`track_history_except_column_list`** are independent — both must appear in `apply_changes()`.
-9. **`schemaLocation`** — always use `/Volumes/workspace/default/ecommerce_raw_volume/_schemas/{{entity}}`. Never `/tmp/`.
-10. **`delta.enableChangeDataFeed`** — `"true"` for Bronze and Silver; `"false"` for Gold.
+4. **Silver SCD2** — três chamadas separadas: `@dlt.view` → `dlt.create_streaming_table()` → `dlt.apply_changes()`.
+5. **Gold** — `dlt.read()` (batch). CDF **desabilitado** (`"false"`).
+6. **Tabelas fato** — devem fazer `INNER JOIN` com sua dimensão. Nunca omita o join.
+7. **Parâmetro `schema=`** — nunca passe `schema="catalog.schema"` para `@dlt.table()` ou `dlt.create_streaming_table()`. Esse parâmetro é exclusivo para DDL de colunas.
+8. **`except_column_list`** e **`track_history_except_column_list`** são independentes — ambos devem aparecer em `apply_changes()`.
+9. **`schemaLocation`** — use sempre `/Volumes/workspace/default/ecommerce_raw_volume/_schemas/{{entity}}`. Nunca `/tmp/`.
+10. **`delta.enableChangeDataFeed`** — `"true"` para Bronze e Silver; `"false"` para Gold.

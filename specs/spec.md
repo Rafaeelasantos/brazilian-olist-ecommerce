@@ -1,39 +1,39 @@
-# Olist E-Commerce — Lakeflow Pipeline Specification (PySpark)
+# Olist E-Commerce — Especificação do Pipeline Lakeflow (PySpark)
 
-**Version:** 2.0 — May 2025
+**Versão:** 2.0 — Maio 2025
 
-| Field | Value |
+| Campo | Valor |
 |---|---|
-| **Project Name** | Olist E-Commerce Analytics |
+| **Nome do Projeto** | Olist E-Commerce Analytics |
 | **Catalog** | `workspace` |
 | **Schema (Bronze / Silver / Gold)** | `bronze` / `silver` / `gold` |
-| **Volume Base Path** | `/Volumes/workspace/default/ecommerce_raw_volume` |
-| **Pipeline Name** | `olist_ecommerce_dev_lakeflow` |
-| **Environment** | dev |
+| **Caminho Base do Volume** | `/Volumes/workspace/default/ecommerce_raw_volume` |
+| **Nome do Pipeline** | `olist_ecommerce_dev_lakeflow` |
+| **Ambiente** | dev |
 
-> 📐 **Code templates:** All PySpark / DLT code patterns are defined in `.cursor/rules/pipeline_templates.mdc`. Follow those templates exactly when generating or reviewing pipeline files.
+> **Templates de código:** Todos os padrões de código PySpark / DLT estão definidos em `templates/pipeline_templates.mdc`. Siga esses templates rigorosamente ao gerar ou revisar arquivos de pipeline.
 
 ---
 
-## 1. Data Architecture — Medallion
+## 1. Arquitetura de Dados — Medallion
 
-All tables use Unity Catalog no formato `catalog.schema.table`.
+Todas as tabelas utilizam Unity Catalog no formato `catalog.schema.table`.
 
-| Layer | Name | Purpose |
+| Camada | Nome | Finalidade |
 |---|---|---|
-| 🥉 Bronze | Raw Layer | Immutable ingestion of CSV files via Auto Loader (`cloudFiles`). Metadata fields added here. |
-| 🥈 Silver | Curated Layer | Cleaned and standardised data. SCD Type 2 applied to Customers via `dlt.apply_changes()`. Derived fields computed here. |
-| 🥇 Gold | Business Layer | Star schema with fact and dimension tables. Aggregated metrics ready for reporting. |
+| Bronze | Camada Bruta | Ingestão imutável de arquivos CSV via Auto Loader (`cloudFiles`). Campos de metadados adicionados aqui. |
+| Silver | Camada Curada | Dados limpos e padronizados. SCD Type 2 aplicado em Customers via `dlt.apply_changes()`. Campos derivados calculados aqui. |
+| Gold | Camada de Negócio | Star schema com tabelas fato e dimensão. Métricas agregadas prontas para relatórios. |
 
 ---
 
-## 2. Data Sources — Bronze Ingestion
+## 2. Fontes de Dados — Ingestão Bronze
 
-> ⚠️ **Critical — Python Auto Loader syntax:** Em pipelines Python/PySpark, o Auto Loader é invocado via `spark.readStream.format("cloudFiles")` com as opções `cloudFiles.format`, `cloudFiles.schemaLocation`, etc. O `schemaLocation` **deve ser declarado explicitamente** no código Python — diferente do SQL, onde é gerenciado automaticamente pelo runtime.
+> **Crítico — sintaxe Python do Auto Loader:** Em pipelines Python/PySpark, o Auto Loader é invocado via `spark.readStream.format("cloudFiles")` com as opções `cloudFiles.format`, `cloudFiles.schemaLocation`, etc. O `schemaLocation` **deve ser declarado explicitamente** no código Python — diferente do SQL, onde é gerenciado automaticamente pelo runtime.
 
-### Source Paths
+### Caminhos das Fontes
 
-> ⚠️ **Critical — Volume directory structure:** No Unity Catalog Volume deste workspace, cada dataset CSV é armazenado **dentro de um diretório**, não como um arquivo avulso. O nome do diretório inclui a extensão `.csv` (e.g., `olist_products_dataset.csv/` é um diretório, não um arquivo). O Auto Loader deve apontar para o **diretório** (com barra final `/`), não para um caminho de arquivo. Passar um caminho de arquivo inexistente causa `FileNotFoundException`.
+> **Crítico — estrutura de diretórios do Volume:** No Unity Catalog Volume deste workspace, cada dataset CSV é armazenado **dentro de um diretório**, não como um arquivo avulso. O nome do diretório inclui a extensão `.csv` (ex.: `olist_products_dataset.csv/` é um diretório, não um arquivo). O Auto Loader deve apontar para o **diretório** (com barra final `/`), não para um caminho de arquivo. Passar um caminho de arquivo inexistente causa `FileNotFoundException`.
 >
 > Estrutura real no volume:
 > ```
@@ -50,7 +50,7 @@ All tables use Unity Catalog no formato `catalog.schema.table`.
 >     └── product_category_name_translation.csv
 > ```
 
-| Entity | Directory (Auto Loader target) | Source Path |
+| Entidade | Diretório (alvo do Auto Loader) | Caminho da Fonte |
 |---|---|---|
 | `orders` | `olist_orders_dataset.csv/` | `/Volumes/workspace/default/ecommerce_raw_volume/olist_orders_dataset.csv/` |
 | `order_items` | `olist_order_items_dataset.csv/` | `/Volumes/workspace/default/ecommerce_raw_volume/olist_order_items_dataset.csv/` |
@@ -58,336 +58,369 @@ All tables use Unity Catalog no formato `catalog.schema.table`.
 | `products` | `olist_products_dataset.csv/` | `/Volumes/workspace/default/ecommerce_raw_volume/olist_products_dataset.csv/` |
 | `product_category` | `product_category/` | `/Volumes/workspace/default/ecommerce_raw_volume/product_category/` |
 
-### `cloudFiles` Options — CSV (Python)
+### Opções `cloudFiles` — CSV (Python)
 
-| Option | Value | Note |
+| Opção | Valor | Observação |
 |---|---|---|
-| `cloudFiles.format` | `"csv"` | Required |
-| `header` | `"true"` | First row as column names |
-| `delimiter` | `","` | Field separator |
-| `inferSchema` | `"false"` | Use declared schema for production stability |
-| `cloudFiles.schemaLocation` | `"/Volumes/workspace/default/ecommerce_raw_volume/_schemas/<entity>"` | Obrigatório em Python; gerenciado por entidade. **Nunca use `/tmp/` — DBFS root está desabilitado neste workspace. Sempre usar Unity Catalog Volume.** |
+| `cloudFiles.format` | `"csv"` | Obrigatório |
+| `header` | `"true"` | Primeira linha como nomes de colunas |
+| `delimiter` | `","` | Separador de campos |
+| `inferSchema` | `"false"` | Usar schema declarado para estabilidade em produção |
+| `cloudFiles.schemaLocation` | `"/Volumes/workspace/default/ecommerce_raw_volume/_schemas/<entidade>"` | Obrigatório em Python; gerenciado por entidade. **Nunca use `/tmp/` — DBFS root está desabilitado neste workspace. Sempre usar Unity Catalog Volume.** |
 | `cloudFiles.schemaEvolutionMode` | `"none"` | Recomendado para produção |
 
-> ℹ️ `_metadata.file_path` é uma coluna de metadados exposta pelo Auto Loader. Ela deve ser referenciada via `col("_metadata.file_path")` antes de qualquer transformação que remova colunas de metadados.
+> `_metadata.file_path` é uma coluna de metadados exposta pelo Auto Loader. Ela deve ser referenciada via `col("_metadata.file_path")` antes de qualquer transformação que remova colunas de metadados.
 
-> 📐 **Template:** Use **Template 1** from `.cursor/rules/pipeline_templates.mdc` for all Bronze tables.
+> **Template:** Use o **Template 1** de `templates/pipeline_templates.mdc` para todas as tabelas Bronze.
 
-> ⚠️ **Critical — `schema` parameter in `@dlt.table()` / `dlt.create_streaming_table()`:** O parâmetro `schema` nessas funções é reservado para **definição de colunas DDL** (ex.: `"order_id STRING, price DOUBLE"`). Ele **não** define onde a tabela é publicada. Passar `schema="workspace.bronze"` (ou qualquer valor `catalog.schema`) faz o runtime tentar interpretar a string como DDL de colunas, causando um erro de sintaxe SQL. A localização de publicação (catalog + schema) é controlada pelos campos `catalog` e `target` no `databricks.yml`. **Nunca passe `schema=` com valores `catalog.schema` nos decoradores DLT.**
+> **Crítico — parâmetro `schema=` em `@dlt.table()` / `dlt.create_streaming_table()`:** O parâmetro `schema` nessas funções é reservado para **definição de colunas DDL** (ex.: `"order_id STRING, price DOUBLE"`). Ele **não** define onde a tabela é publicada. Passar `schema="workspace.bronze"` (ou qualquer valor `catalog.schema`) faz o runtime tentar interpretar a string como DDL de colunas, causando um erro de sintaxe SQL. A localização de publicação (catalog + schema) é controlada pelos campos `catalog` e `target` no `databricks.yml`. **Nunca passe `schema=` com valores `catalog.schema` nos decoradores DLT.**
 
 ---
 
-## 3. Entities
+## 3. Entidades
 
-### 3.1 Orders
+### 3.1 Orders (Pedidos)
 
-| Attribute | Value |
+| Atributo | Valor |
 |---|---|
-| **Type** | Fact source |
-| **Domain** | `orders` |
-| **PII Level** | Low |
+| **Tipo** | Fonte de Fato |
+| **Domínio** | `orders` |
+| **Nível de PII** | Baixo |
 
-#### Fields
+#### Campos
 
-| Field | Type | Description | PII / Tags |
+| Campo | Tipo | Descrição | PII / Tags |
 |---|---|---|---|
-| `order_id` | StringType | Unique order identifier (PK) | — |
-| `customer_id` | StringType | Key to the customers dataset | — |
-| `order_status` | StringType | Order status (`delivered`, `shipped`, etc.) | — |
-| `order_purchase_timestamp` | TimestampType | Purchase timestamp | — |
-| `order_approved_at` | TimestampType | Payment approval timestamp | — |
-| `order_delivered_carrier_date` | TimestampType | Posting date — when handed to the logistics partner | — |
-| `order_delivered_customer_date` | TimestampType | Actual delivery date to customer | — |
-| `order_estimated_delivery_date` | TimestampType | Estimated delivery date shown to customer at purchase | — |
+| `order_id` | StringType | Identificador único do pedido (PK) | — |
+| `customer_id` | StringType | Chave para o dataset de clientes | — |
+| `order_status` | StringType | Status do pedido (`delivered`, `shipped`, etc.) | — |
+| `order_purchase_timestamp` | TimestampType | Timestamp da compra | — |
+| `order_approved_at` | TimestampType | Timestamp de aprovação do pagamento | — |
+| `order_delivered_carrier_date` | TimestampType | Data de postagem — quando entregue ao parceiro logístico | — |
+| `order_delivered_customer_date` | TimestampType | Data real de entrega ao cliente | — |
+| `order_estimated_delivery_date` | TimestampType | Data estimada de entrega exibida ao cliente no momento da compra | — |
 
-#### Derived Fields — Silver
+#### Campos Derivados — Silver
 
-| Field | Logic |
+| Campo | Lógica |
 |---|---|
-| `delivery_delay_days` | `datediff(col("order_delivered_customer_date"), col("order_estimated_delivery_date"))` — positive = late |
+| `delivery_delay_days` | `datediff(col("order_delivered_customer_date"), col("order_estimated_delivery_date"))` — positivo = atrasado |
 | `order_processing_days` | `datediff(col("order_approved_at"), col("order_purchase_timestamp"))` |
 | `is_late_delivery` | `when(col("delivery_delay_days") > 0, True).otherwise(False)` |
 
-#### Data Quality Constraints
+#### Restrições de Qualidade de Dados
 
-| Constraint | Expression |
+| Restrição | Expressão |
 |---|---|
 | `valid_order_id` | `order_id IS NOT NULL` |
 | `valid_customer_id` | `customer_id IS NOT NULL` |
 | `valid_status` | `order_status IS NOT NULL` |
 
-> 📐 **Template:** Use **Template 2** from `.cursor/rules/pipeline_templates.mdc` for `silver_orders`.
+> **Template:** Use o **Template 2** de `templates/pipeline_templates.mdc` para `silver_orders`.
 
 ---
 
-### 3.2 Order Items
+### 3.2 Order Items (Itens do Pedido)
 
-| Attribute | Value |
+| Atributo | Valor |
 |---|---|
-| **Type** | Fact source |
-| **Domain** | `order_items` |
-| **PII Level** | Low |
+| **Tipo** | Fonte de Fato |
+| **Domínio** | `order_items` |
+| **Nível de PII** | Baixo |
 
-#### Fields
+#### Campos
 
-| Field | Type | Description | PII / Tags |
+| Campo | Tipo | Descrição | PII / Tags |
 |---|---|---|---|
-| `order_id` | StringType | Order unique identifier (FK → orders) | — |
-| `order_item_id` | IntegerType | Sequential item number within the order | — |
-| `product_id` | StringType | Product unique identifier (FK → products) | — |
-| `seller_id` | StringType | Seller unique identifier | — |
-| `shipping_limit_date` | TimestampType | Seller shipping limit date | — |
-| `price` | DoubleType | Item price | — |
-| `freight_value` | DoubleType | Item freight value | — |
+| `order_id` | StringType | Identificador único do pedido (FK → orders) | — |
+| `order_item_id` | IntegerType | Número sequencial do item dentro do pedido | — |
+| `product_id` | StringType | Identificador único do produto (FK → products) | — |
+| `seller_id` | StringType | Identificador único do vendedor | — |
+| `shipping_limit_date` | TimestampType | Data limite de envio pelo vendedor | — |
+| `price` | DoubleType | Preço do item | — |
+| `freight_value` | DoubleType | Valor do frete do item | — |
 
-#### Derived Fields — Silver
+#### Campos Derivados — Silver
 
-| Field | Logic |
+| Campo | Lógica |
 |---|---|
 | `total_item_value` | `col("price") + col("freight_value")` |
 
-#### Data Quality Constraints
+#### Restrições de Qualidade de Dados
 
-| Constraint | Expression |
+| Restrição | Expressão |
 |---|---|
 | `valid_order_id` | `order_id IS NOT NULL` |
 | `valid_product_id` | `product_id IS NOT NULL` |
 | `valid_price` | `price >= 0` |
 
-> 📐 **Template:** Use **Template 2** from `.cursor/rules/pipeline_templates.mdc` for `silver_order_items`.
+> **Template:** Use o **Template 2** de `templates/pipeline_templates.mdc` para `silver_order_items`.
 
 ---
 
-### 3.3 Customers (Dimension — SCD Type 2)
+### 3.3 Customers (Clientes — Dimensão SCD Type 2)
 
-| Attribute | Value |
+| Atributo | Valor |
 |---|---|
-| **Type** | Dimension — SCD Type 2 |
-| **Domain** | `customers` |
-| **PII Level** | 🔒 High |
+| **Tipo** | Dimensão — SCD Type 2 |
+| **Domínio** | `customers` |
+| **Nível de PII** | Alto |
 
-#### Fields
+#### Campos
 
-| Field | Type | Description | PII / Tags |
+| Campo | Tipo | Descrição | PII / Tags |
 |---|---|---|---|
-| `customer_id` | StringType | Key to the orders dataset — unique per order | — |
-| `customer_unique_id` | StringType | Unique identifier of the customer (person) | — |
-| `customer_zip_code_prefix` | StringType | First five digits of customer zip code | 🔒 PII |
-| `customer_city` | StringType | Customer city name | — |
-| `customer_state` | StringType | Customer state | — |
+| `customer_id` | StringType | Chave para o dataset de pedidos — única por pedido | — |
+| `customer_unique_id` | StringType | Identificador único do cliente (pessoa) | — |
+| `customer_zip_code_prefix` | StringType | Primeiros cinco dígitos do CEP do cliente | PII |
+| `customer_city` | StringType | Nome da cidade do cliente | — |
+| `customer_state` | StringType | Estado do cliente | — |
 
-#### Derived Fields — Silver
+#### Campos Derivados — Silver
 
-| Field | Logic |
+| Campo | Lógica |
 |---|---|
 | `customer_location` | `concat(col("customer_city"), lit(", "), col("customer_state"))` |
 
-#### Data Quality Constraints
+#### Restrições de Qualidade de Dados
 
 Aplicadas na view de pré-processamento antes do `apply_changes`:
 
-| Constraint | Expression |
+| Restrição | Expressão |
 |---|---|
 | `valid_customer_id` | `customer_id IS NOT NULL` |
 | `valid_unique_id` | `customer_unique_id IS NOT NULL` |
 
-> 📐 **Template:** Use **Template 3** from `.cursor/rules/pipeline_templates.mdc` for `silver_customers`.
+> **Template:** Use o **Template 3** de `templates/pipeline_templates.mdc` para `silver_customers`.
 
 ---
 
-### 3.4 Products
+### 3.4 Products (Produtos)
 
-| Attribute | Value |
+| Atributo | Valor |
 |---|---|
-| **Type** | Dimension |
-| **Domain** | `products` |
-| **PII Level** | Low |
+| **Tipo** | Dimensão |
+| **Domínio** | `products` |
+| **Nível de PII** | Baixo |
 
-#### Fields
+#### Campos
 
-| Field | Type | Description | PII / Tags |
+| Campo | Tipo | Descrição | PII / Tags |
 |---|---|---|---|
-| `product_id` | StringType | Unique product identifier (PK) | — |
-| `product_category_name` | StringType | Root category name in Portuguese (FK → product_category) | — |
-| `product_name_lenght` | IntegerType | Number of characters in the product name | — |
-| `product_description_lenght` | IntegerType | Number of characters in the product description | — |
-| `product_photos_qty` | IntegerType | Number of published product photos | — |
-| `product_weight_g` | DoubleType | Product weight in grams | — |
-| `product_length_cm` | DoubleType | Product length in centimetres | — |
-| `product_height_cm` | DoubleType | Product height in centimetres | — |
-| `product_width_cm` | DoubleType | Product width in centimetres | — |
+| `product_id` | StringType | Identificador único do produto (PK) | — |
+| `product_category_name` | StringType | Nome da categoria raiz em português (FK → product_category) | — |
+| `product_name_lenght` | IntegerType | Número de caracteres no nome do produto | — |
+| `product_description_lenght` | IntegerType | Número de caracteres na descrição do produto | — |
+| `product_photos_qty` | IntegerType | Número de fotos publicadas do produto | — |
+| `product_weight_g` | DoubleType | Peso do produto em gramas | — |
+| `product_length_cm` | DoubleType | Comprimento do produto em centímetros | — |
+| `product_height_cm` | DoubleType | Altura do produto em centímetros | — |
+| `product_width_cm` | DoubleType | Largura do produto em centímetros | — |
 
-#### Derived Fields — Silver
+#### Campos Derivados — Silver
 
-| Field | Logic |
+| Campo | Lógica |
 |---|---|
 | `product_volume_cm3` | `col("product_length_cm") * col("product_height_cm") * col("product_width_cm")` |
 | `product_category_name_english` | Join com `workspace.silver.silver_product_category` em `product_category_name` |
 
-#### Data Quality Constraints
+#### Restrições de Qualidade de Dados
 
-| Constraint | Expression |
+| Restrição | Expressão |
 |---|---|
 | `valid_product_id` | `product_id IS NOT NULL` |
 | `valid_weight` | `product_weight_g > 0` |
 
-> 📐 **Template:** Use **Template 2** from `.cursor/rules/pipeline_templates.mdc` for `silver_products`.
+> **Template:** Use o **Template 2** de `templates/pipeline_templates.mdc` para `silver_products`.
 
 ---
 
-### 3.5 Product Category (Reference / Lookup)
+### 3.5 Product Category (Categoria do Produto — Referência / Lookup)
 
-| Attribute | Value |
+| Atributo | Valor |
 |---|---|
-| **Type** | Reference / Lookup |
-| **Domain** | `product_category` |
-| **PII Level** | Low |
+| **Tipo** | Referência / Lookup |
+| **Domínio** | `product_category` |
+| **Nível de PII** | Baixo |
 
-#### Fields
+#### Campos
 
-| Field | Type | Description | PII / Tags |
+| Campo | Tipo | Descrição | PII / Tags |
 |---|---|---|---|
-| `product_category_name` | StringType | Category name in Portuguese (PK) | — |
-| `product_category_name_english` | StringType | Category name in English | — |
+| `product_category_name` | StringType | Nome da categoria em português (PK) | — |
+| `product_category_name_english` | StringType | Nome da categoria em inglês | — |
 
-> ℹ️ Dataset estático de lookup — não requer SCD Type 2. Carregue como streaming table no Silver e faça join com products para enriquecer com o nome em inglês.
+> Dataset estático de lookup — não requer SCD Type 2. Carregue como streaming table no Silver e faça join com products para enriquecer com o nome em inglês.
 
-> 📐 **Template:** Use **Template 2** from `.cursor/rules/pipeline_templates.mdc` for `silver_product_category`.
+> **Template:** Use o **Template 2** de `templates/pipeline_templates.mdc` para `silver_product_category`.
 
 ---
 
-## 4. Silver Layer — SCD Type 2 (Customers)
+## 4. Camada Silver — SCD Type 2 (Customers)
 
-> ⚠️ **Critical:** Em PySpark, o SCD Type 2 é implementado com `dlt.apply_changes()`. Isso requer **três definições separadas**:
-> 1. `@dlt.view` — preprocessing view para filtros e derived fields.
+> **Crítico:** Em PySpark, o SCD Type 2 é implementado com `dlt.apply_changes()`. Isso requer **três definições separadas**:
+> 1. `@dlt.view` — view de pré-processamento para filtros e campos derivados.
 > 2. `dlt.create_streaming_table()` — declara a tabela alvo.
 > 3. `dlt.apply_changes()` — aplica as mudanças CDC.
 >
 > Todas no mesmo arquivo Python, mas são chamadas independentes — não decoradores aninhados.
 
-> ℹ️ `apply_changes()` não aceita filtros diretamente. Se precisar de filtragem ou validação de qualidade, crie uma view de pré-processamento com `@dlt.view` antes de chamar `apply_changes`.
-
-> 📐 **Template:** Use **Template 3** from `.cursor/rules/pipeline_templates.mdc` for `silver_customers.py`.
-
-### SCD Type 2 — `apply_changes()` Configuration
-
-| Parameter | Value |
-|---|---|
-| `target` | `"workspace.silver.silver_customers"` |
-| `source` | `"silver_customers_preprocessed"` |
-| `keys` | `["customer_id"]` |
-| `sequence_by` | `col("_ingest_timestamp")` |
-| `stored_as_scd_type` | `2` |
-| `except_column_list` | `["_processing_timestamp", "_ingest_timestamp"]` |
-| `track_history_except_column_list` | `["_processing_timestamp", "_ingest_timestamp"]` |
-| **SCD Fields generated** | `__START_AT`, `__END_AT`, `__IS_CURRENT` |
-
-> ℹ️ `except_column_list` controla quais campos da fonte são escritos no target. `track_history_except_column_list` controla quais campos, quando alterados, disparam uma nova linha SCD2. São parâmetros independentes e ambos devem ser declarados.
+> `apply_changes()` não aceita filtros diretamente. Se precisar de filtragem ou validação de qualidade de dados antes do CDC, use uma `@dlt.view` intermediária — conforme o Template 3.
 
 ---
 
-## 5. Gold Layer — Star Schema
+## 5. Camada Gold — Star Schema
 
-### 5.1 Dimensions
+### 5.1 dim_customers (Dimensão de Clientes)
 
-| Dimension | Source | Filter | Join Key to Fact |
-|---|---|---|---|
-| `dim_customers` | `workspace.silver.silver_customers` | `__END_AT IS NULL` (SCD2 current rows) | `customer_id` |
-| `dim_products` | `workspace.silver.silver_products` | none | `product_id` |
-
-> 📐 **Template:** Use **Template 4** from `.cursor/rules/pipeline_templates.mdc` for all Gold dimension tables.
-
-### 5.2 Facts
-
-| Fact | Source | Grain | Dimension Join |
-|---|---|---|---|
-| `fct_orders` | `workspace.silver.silver_orders` | One row per order | `INNER JOIN dim_customers ON customer_id` |
-| `fct_order_items` | `workspace.silver.silver_order_items` | One row per order item | `INNER JOIN dim_products ON product_id` |
-
-> ⚠️ **Critical:** Both fact tables **must** perform their INNER JOIN with the respective dimension. Omitting the join causes missing dimension attributes in reporting.
-
-> 📐 **Template:** Use **Template 5** from `.cursor/rules/pipeline_templates.mdc` for all Gold fact tables.
-
-#### `fct_orders` — Fields
-
-| Field | Source |
+| Atributo | Valor |
 |---|---|
-| `order_id` | `silver_orders` (PK) |
-| `customer_id` | `silver_orders` (FK) |
-| `order_status` | `silver_orders` |
-| `order_purchase_timestamp` | `silver_orders` |
-| `order_approved_at` | `silver_orders` |
-| `order_delivered_carrier_date` | `silver_orders` |
-| `order_delivered_customer_date` | `silver_orders` |
-| `order_estimated_delivery_date` | `silver_orders` |
-| `delivery_delay_days` | `silver_orders` (derived) |
-| `order_processing_days` | `silver_orders` (derived) |
-| `is_late_delivery` | `silver_orders` (derived) |
-| `customer_unique_id` | `dim_customers` |
-| `customer_city` | `dim_customers` |
-| `customer_state` | `dim_customers` |
-| `customer_location` | `dim_customers` (derived) |
+| **Tipo** | Dimensão (SCD Type 2 — snapshot atual) |
+| **Fonte** | `workspace.silver.silver_customers` |
+| **PK** | `customer_id` |
+
+#### Campos
+
+| Campo | Origem |
+|---|---|
+| `customer_id` | `silver_customers.customer_id` |
+| `customer_unique_id` | `silver_customers.customer_unique_id` |
+| `customer_zip_code_prefix` | `silver_customers.customer_zip_code_prefix` |
+| `customer_city` | `silver_customers.customer_city` |
+| `customer_state` | `silver_customers.customer_state` |
+| `customer_location` | `silver_customers.customer_location` |
+| `_dimension_refresh_timestamp` | `current_timestamp()` |
+
+> Filtrar `__END_AT IS NULL` para obter apenas o registro atual de cada cliente (snapshot ativo do SCD Type 2).
+
+> **Template:** Use o **Template 4** de `templates/pipeline_templates.mdc`.
+
+---
+
+### 5.2 dim_products (Dimensão de Produtos)
+
+| Atributo | Valor |
+|---|---|
+| **Tipo** | Dimensão |
+| **Fonte** | `workspace.silver.silver_products` |
+| **PK** | `product_id` |
+
+#### Campos
+
+| Campo | Origem |
+|---|---|
+| `product_id` | `silver_products.product_id` |
+| `product_category_name` | `silver_products.product_category_name` |
+| `product_category_name_english` | `silver_products.product_category_name_english` |
+| `product_weight_g` | `silver_products.product_weight_g` |
+| `product_length_cm` | `silver_products.product_length_cm` |
+| `product_height_cm` | `silver_products.product_height_cm` |
+| `product_width_cm` | `silver_products.product_width_cm` |
+| `product_volume_cm3` | `silver_products.product_volume_cm3` |
+| `_dimension_refresh_timestamp` | `current_timestamp()` |
+
+> **Template:** Use o **Template 4** de `templates/pipeline_templates.mdc`.
+
+---
+
+### 5.3 fct_orders (Tabela Fato de Pedidos)
+
+| Atributo | Valor |
+|---|---|
+| **Tipo** | Fato |
+| **Fonte principal** | `workspace.silver.silver_orders` |
+| **Join de dimensão** | `workspace.gold.dim_customers` em `customer_id` |
+| **PK** | `order_id` |
+
+#### Campos
+
+| Campo | Origem |
+|---|---|
+| `order_id` | `silver_orders.order_id` |
+| `customer_id` | `silver_orders.customer_id` |
+| `order_status` | `silver_orders.order_status` |
+| `order_purchase_timestamp` | `silver_orders.order_purchase_timestamp` |
+| `order_approved_at` | `silver_orders.order_approved_at` |
+| `order_delivered_customer_date` | `silver_orders.order_delivered_customer_date` |
+| `order_estimated_delivery_date` | `silver_orders.order_estimated_delivery_date` |
+| `delivery_delay_days` | `silver_orders.delivery_delay_days` |
+| `order_processing_days` | `silver_orders.order_processing_days` |
+| `is_late_delivery` | `silver_orders.is_late_delivery` |
+| `customer_city` | `dim_customers.customer_city` |
+| `customer_state` | `dim_customers.customer_state` |
+| `customer_location` | `dim_customers.customer_location` |
 | `_fact_processing_timestamp` | `current_timestamp()` |
 
-#### `fct_order_items` — Fields
+> **Template:** Use o **Template 5** de `templates/pipeline_templates.mdc`.
 
-| Field | Source |
+---
+
+### 5.4 fct_order_items (Tabela Fato de Itens do Pedido)
+
+| Atributo | Valor |
 |---|---|
-| `order_id` | `silver_order_items` (FK) |
-| `order_item_id` | `silver_order_items` |
-| `product_id` | `silver_order_items` (FK) |
-| `seller_id` | `silver_order_items` |
-| `shipping_limit_date` | `silver_order_items` |
-| `price` | `silver_order_items` |
-| `freight_value` | `silver_order_items` |
-| `total_item_value` | `silver_order_items` (derived) |
-| `product_category_name` | `dim_products` |
-| `product_category_name_english` | `dim_products` |
-| `product_volume_cm3` | `dim_products` (derived) |
-| `product_weight_g` | `dim_products` |
+| **Tipo** | Fato |
+| **Fonte principal** | `workspace.silver.silver_order_items` |
+| **Join de dimensão** | `workspace.gold.dim_products` em `product_id` |
+| **PK** | `order_id` + `order_item_id` |
+
+#### Campos
+
+| Campo | Origem |
+|---|---|
+| `order_id` | `silver_order_items.order_id` |
+| `order_item_id` | `silver_order_items.order_item_id` |
+| `product_id` | `silver_order_items.product_id` |
+| `seller_id` | `silver_order_items.seller_id` |
+| `shipping_limit_date` | `silver_order_items.shipping_limit_date` |
+| `price` | `silver_order_items.price` |
+| `freight_value` | `silver_order_items.freight_value` |
+| `total_item_value` | `silver_order_items.total_item_value` |
+| `product_category_name` | `dim_products.product_category_name` |
+| `product_category_name_english` | `dim_products.product_category_name_english` |
+| `product_volume_cm3` | `dim_products.product_volume_cm3` |
 | `_fact_processing_timestamp` | `current_timestamp()` |
 
----
-
-## 6. Table Properties
-
-| Property | Bronze | Silver | Gold |
-|---|---|---|---|
-| `quality` | `"bronze"` | `"silver"` | `"gold"` |
-| `layer` | `"bronze"` | `"silver"` | `"gold"` |
-| `domain` | entity name | entity name | entity name |
-| `pipelines.autoOptimize.zOrderCols` | PK field | PK field | PK field |
-| `delta.enableChangeDataFeed` | `"true"` | `"true"` | `"false"` |
+> **Template:** Use o **Template 5** de `templates/pipeline_templates.mdc`.
 
 ---
 
-## 7. Metadata Fields
+## 6. Estrutura de Arquivos do Pipeline
 
-| Field | Layer | Logic |
-|---|---|---|
-| `_ingest_timestamp` | Bronze | `current_timestamp()` at ingestion |
-| `_source_file` | Bronze | `col("_metadata.file_path")` |
-| `_processing_timestamp` | Silver | `current_timestamp()` at transformation |
-| `_dimension_refresh_timestamp` | Gold (dim) | `current_timestamp()` when dimension is refreshed |
-| `_fact_processing_timestamp` | Gold (fact) | `current_timestamp()` when fact is processed |
+```
+olist_ecommerce/
+├── databricks.yml
+├── README.md
+└── src/
+    ├── bronze/
+    │   ├── bronze_orders.py
+    │   ├── bronze_order_items.py
+    │   ├── bronze_customers.py
+    │   ├── bronze_products.py
+    │   └── bronze_product_category.py
+    ├── silver/
+    │   ├── silver_orders.py
+    │   ├── silver_order_items.py
+    │   ├── silver_customers.py
+    │   ├── silver_products.py
+    │   └── silver_product_category.py
+    └── gold/
+        ├── dim_customers.py
+        ├── dim_products.py
+        ├── fct_orders.py
+        └── fct_order_items.py
+```
 
 ---
 
-## 8. Databricks Asset Bundle (`databricks.yml`)
+## 7. Regras Gerais
 
-| Field | Value |
-|---|---|
-| `bundle.name` | `olist_ecommerce` |
-| `workspace.host` | `https://dbc-f76716c3-b252.cloud.databricks.com/` |
-| `targets.dev.mode` | `development` |
-| `pipeline.target` | `ecommerce_analytics` |
-| `pipeline.continuous` | `false` (in `resources.pipelines.<name>`, not inside `configuration:`) |
-
-> ⚠️ `continuous: false` goes in the `resources.pipelines.<name>` block, **never** inside `configuration:`.  
-> ⚠️ `mode: production` requires `run_as` to be declared.  
-> ⚠️ Never pass `schema="catalog.schema"` to `@dlt.table()` — the publication location is controlled by `catalog` and `target` in `databricks.yml`.
-
----
-
-> **Version:** 2.0.0  
-> **Updated:** 2026-05-25
+1. **Nomenclatura** — sempre `catalog.schema.table` com 3 partes. Nunca `LIVE.*`.
+2. **Bronze** — somente `spark.readStream.format("cloudFiles")`. Nunca transforme dados nesta camada.
+3. **Silver** — aplique limpeza, cast de tipos, campos derivados e restrições de qualidade (`@dlt.expect_or_drop`).
+4. **Gold** — leitura batch (`dlt.read()`). CDF desabilitado. Sempre inclua o `INNER JOIN` com a dimensão correspondente.
+5. **SCD Type 2** — somente para `customers`. Três chamadas separadas no mesmo arquivo Python.
+6. **`schemaLocation`** — sempre em Unity Catalog Volume (`/Volumes/...`). Nunca `/tmp/`.
+7. **`delta.enableChangeDataFeed`** — `"true"` para Bronze e Silver; `"false"` para Gold.
+8. **Timestamps de auditoria** — Bronze: `_ingest_timestamp`. Silver: `_processing_timestamp`. Gold dimensão: `_dimension_refresh_timestamp`. Gold fato: `_fact_processing_timestamp`.
+9. **Deploy** — via `databricks bundle deploy` com o perfil correto configurado no `~/.databrickscfg`.

@@ -34,13 +34,13 @@ resources:
         - file:
             path: src/silver/silver_product_category.py
         - file:
-            path: src/gold/gold_orders_summary.py
+            path: src/gold/dim_customers.py
         - file:
-            path: src/gold/gold_revenue_by_category.py
+            path: src/gold/dim_products.py
         - file:
-            path: src/gold/gold_customer_lifetime_value.py
+            path: src/gold/fct_orders.py
         - file:
-            path: src/gold/gold_delivery_performance.py
+            path: src/gold/fct_order_items.py
 
 targets:
   dev:
@@ -48,3 +48,10 @@ targets:
     default: true
     workspace:
       host: https://dbc-f76716c3-b252.cloud.databricks.com/
+
+  prod:
+    mode: production
+    workspace:
+      host: https://dbc-f76716c3-b252.cloud.databricks.com/
+    run_as:
+      user_name: rafaela.aws1992@gmail.com
